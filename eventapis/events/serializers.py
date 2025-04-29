@@ -133,7 +133,7 @@ class TicketSerializer(serializers.ModelSerializer):
 class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
-        fields = ['id', 'ticket', 'method', 'amount', 'status', 'payment_url', 'created_date']
+        fields = ['id', 'ticket_id', 'method', 'amount', 'status', 'payment_url', 'created_date']
         extra_kwargs = {
             'amount': {'read_only': True},
             'status': {'read_only': True},

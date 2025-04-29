@@ -4,7 +4,10 @@ from ckeditor.fields import RichTextField
 from cloudinary.models import CloudinaryField
 import uuid
 from django.core.mail import send_mail
-
+from django.core.mail import EmailMessage
+import qrcode
+from io import BytesIO
+from email.mime.image import MIMEImage
 
 # ------------------ USERS & ROLES ------------------
 class User(AbstractUser):
@@ -85,7 +88,7 @@ class Ticket(BaseModel):
     event = models.ForeignKey(Event, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     ticket_type = models.CharField(max_length=10, choices=[('regular', 'Regular'), ('vip', 'VIP')])
-    quantity = models.PositiveIntegerField(default=1)  # Số lượng vé
+    quantity = models.PositiveIntegerField(default=0)  # Số lượng vé
     status = models.CharField(max_length=15, choices=[('pending', 'Pending'), ('booked', 'Booked'), ('cancelled', 'Cancelled')], default='pending')
     qr_code = models.CharField(max_length=100, unique=True, blank=True)
     expires_at = models.DateTimeField()  # Hạn 30 phút hoặc 3 phút
@@ -99,25 +102,60 @@ class Ticket(BaseModel):
             self.send_ticket_email()
 
     def send_ticket_email(self):
+        # Tạo hình ảnh QR code từ chuỗi qr_code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(self.qr_code)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        # Lưu hình ảnh vào bộ nhớ tạm
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        qr_code_image = buffer.getvalue()
+
+        # Tạo email HTML
         subject = f'Vé sự kiện: {self.event.name}'
-        message = f'''
-        Cảm ơn bạn đã đặt vé cho sự kiện: {self.event.name}
-        Loại vé: {self.ticket_type}
-        Số lượng: {self.quantity}
-        Mã QR: {self.qr_code}
-        Vui lòng sử dụng mã QR này để check-in tại sự kiện.
-        '''
-        send_mail(subject, message, 'from@example.com', [self.user.email], fail_silently=False)
+        html_message = f'''
+                <h2>Cảm ơn bạn đã đặt vé cho sự kiện: {self.event.name}</h2>
+                <h3>Loại vé: {self.ticket_type}</h3>
+                <h3>Số lượng: {self.quantity}</h3>
+                <h3>Mã QR: {self.qr_code}</h3>
+                <h3><i>Vui lòng sử dụng mã QR dưới đây để check-in tại sự kiện:</hi></h3>
+                <img src="cid:qr_code_image" alt="QR Code">
+                '''
+        email = EmailMessage(
+            subject,
+            html_message,
+            'from@example.com',
+            [self.user.email],
+        )
+        email.content_subtype = "html"  # Đặt email là HTML
+
+        # Đính kèm hình ảnh với Content-ID
+        mime_image = MIMEImage(qr_code_image)
+        mime_image.add_header('Content-ID', '<qr_code_image>')
+        mime_image.add_header('Content-Disposition', 'inline', filename='qr_code.png')
+        email.attach(mime_image)
+
+        email.send(fail_silently=False)
 
     def __str__(self):
-        return f"Ticket: {self.ticket_type} | {self.event.name} | User: {self.user.username} | Status: {self.status}"
+            return f"Ticket: {self.ticket_type} | {self.event.name} | User: {self.user.username} | Status: {self.status}"
 
 class Payment(BaseModel):
     ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE)
-    method = models.CharField(max_length=20, choices=[('vnpay', 'VNPay'), ('momo', 'Momo'), ('zalopay', 'ZaloPay'), ('VNPay', 'VNPay')])
+    method = models.CharField(max_length=20, choices=[('vnpay', 'VNPay'), ('momo', 'Momo'), ('zalopay', 'ZaloPay')])
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=[('pending', 'Pending'), ('completed', 'Completed'), ('failed', 'Failed')], default='pending')
-    payment_url = models.URLField(blank=True, null=True)  # URL chuyển hướng cổng thanh toán
+    payment_url = models.URLField(max_length=1000, blank=True, null=True)
+
+    class Meta:
+        unique_together = ('ticket',)
 
     def __str__(self):
         return f"Payment: {self.amount} | Method: {self.method} | Status: {self.status}"

@@ -17,6 +17,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # MEDIA_ROOT sẽ xác định nơi upload ảnh
 MEDIA_ROOT = '%s/events/static/' % BASE_DIR
+STATICFILES_DIRS = [BASE_DIR / 'static']
+
+TIME_ZONE = 'Asia/Saigon'
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -27,7 +30,11 @@ SECRET_KEY = 'django-insecure-9!hvs50q!$cwbo!7gqo57-a-dmo-v)lk)ubh))2!j*mcyvg(@b
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '346d-171-250-11-112.ngrok-free.app',  # thêm ngrok domain vào đây
+]
 
 SITE_ID = 3
 
@@ -86,7 +93,7 @@ CKEDITOR_UPLOAD_PATH = "ckeditors/events"
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -202,24 +209,9 @@ LOGOUT_REDIRECT_URL = "/"
 
 AUTH_USER_MODEL = 'events.User'
 
-# Cấu hình VNPay
-VNPAY_TMN_CODE = 'YOUR_VNPAY_TMN_CODE'
-VNPAY_HASH_SECRET_KEY = 'YOUR_VNPAY_HASH_SECRET_KEY'
-VNPAY_URL = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
-VNPAY_RETURN_URL = 'http://localhost:8000/tickets/payment/return/'
-
-# Cấu hình gửi email
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'your-email@gmail.com'
-EMAIL_HOST_PASSWORD = 'your-app-password'
-DEFAULT_FROM_EMAIL = 'your-email@gmail.com'
-
 # Hoàng
-# Client_id : Ru0W0uxtzxQLmvscRcHhsWIEDhH86VpMHLphGCPj
-# Client_secret: BEqiUSiNIGpxOE7e5Fmr3w9ZzAoFDkHrOzL2wkBRkUH95PgyaNDzPOUdMj8jAV76D2RMopthVUapKuSDvS6Z6qPEPI7AixKeWEGTuM8k60rq5jJxHqWQg83i3djUlhs9
+# Client_id : MBK54ICEHKmaUKKGwkhxUH0ZYYJpgvGqNelJIuSi
+# Client_secret: RxpHCMTeO0Ixf2V5sC3KXcKUhNTya5kwNjynP3O5mCsQaUPjordWQvwsAle1aDxAhH9x0uaQ0dunwp9B9xNrxN4NPmejBXi1YDMLHJuqjAKxENvds93HPBM6K7qiq3sF
 
 # Quân
 # DEFAULT_OAUTH2_CLIENT_ID = 'LUQb13fIsa3mF5nnBakoDDTorY4Hhm88LUw429uz'
@@ -227,4 +219,22 @@ DEFAULT_FROM_EMAIL = 'your-email@gmail.com'
 
 # GOOGLE_CLIENT_ID = '803363646882-969u7bsui6ujmr0g9tumrenlqsgjb2o9.apps.googleusercontent.com'
 # GOOGLE_OAUTH2_SECRET = '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'
+
+
+# VNPAY CONFIG
+VNPAY_TMN_CODE = 'LPXTIU1F'
+VNPAY_HASH_SECRET_KEY = '71GVT9UD1D6SUY4CVI81MCUUYF6SQT48'
+VNPAY_PAYMENT_URL = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
+VNPAY_API_URL = 'https://sandbox.vnpayment.vn/merchant_webapi/api/transaction'
+VNPAY_RETURN_URL = 'http://127.0.0.1:8000/payments/return/'
+
+# Email configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = '2251050031hoang@gmail.com'
+EMAIL_HOST_PASSWORD = 'yvcx rxva vwdg amba'
+DEFAULT_FROM_EMAIL = '2251050031hoang@gmail.com'
+
 

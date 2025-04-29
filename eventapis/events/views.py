@@ -1,3 +1,4 @@
+from rest_framework.exceptions import ValidationError
 from django.contrib.auth import authenticate
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -5,7 +6,7 @@ from rest_framework import status, mixins
 from events.models import User, Category, Event, Ticket, Payment
 from events import serializers, perms
 from rest_framework import viewsets, generics, parsers, permissions
-from oauth2_provider.models import AccessToken, Application
+from oauth2_provider.models import AccessToken, Application, RefreshToken
 from oauth2_provider.settings import oauth2_settings
 from datetime import datetime
 from django.utils import timezone
@@ -16,13 +17,26 @@ from django.conf import settings
 from rest_framework.authtoken.models import Token
 from django.utils import timezone
 from datetime import timedelta
-from oauth2_provider.models import AccessToken, Application, RefreshToken
 from events.serializers import UserSerializer
 import secrets
 from django.db.models import Q
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
-from django.conf import settings
+from django.http import JsonResponse
+from events.vnpay import vnpay
+
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+def hmacsha512(key, data):
+    byteKey = key.encode('utf-8')
+    byteData = data.encode('utf-8')
+    return hmac.new(byteKey, byteData, hashlib.sha512).hexdigest()
 
 class UserViewSet(viewsets.ViewSet, generics.CreateAPIView, generics.UpdateAPIView):
     """
@@ -196,6 +210,7 @@ class UserViewSet(viewsets.ViewSet, generics.CreateAPIView, generics.UpdateAPIVi
 
         return Response({'message': 'Đăng xuất thành công'}, status=status.HTTP_200_OK)
 
+
 class OrganizerViewSet(viewsets.GenericViewSet):
     """
     ViewSet cho các hành động liên quan đến nhà tổ chức, như xác thực.
@@ -243,6 +258,7 @@ class CategoryViewSet(viewsets.ViewSet, generics.ListAPIView):
     serializer_class = serializers.CategorySerializer
     permission_classes = [perms.IsAdminOrReadOnly]
 
+
 class EventViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
     queryset = Event.objects.all()
     serializer_class = serializers.EventSerializer
@@ -285,6 +301,7 @@ class EventViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
         event.status = 'rejected'
         event.save()
         return Response({"detail": "Sự kiện đã bị từ chối."})
+
     @action(detail=False, methods=['get'], url_path='search', permission_classes=[permissions.AllowAny])
     def search(self, request):
         """
@@ -331,3 +348,185 @@ class EventViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
         serializer = self.serializer_class(events, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+class TicketViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    queryset = Ticket.objects.all()
+    serializer_class = serializers.TicketSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        """
+        API Đặt vé: /events/{event_id}/tickets/
+        """
+        event_id = self.kwargs.get('event_id')
+        if not event_id:
+            return Response({"detail": "Thiếu event_id trong URL."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            event = Event.objects.get(id=event_id, status='approved')
+        except Event.DoesNotExist:
+            return Response({"detail": "Sự kiện không tồn tại hoặc chưa được duyệt."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except ValidationError as e:  # Sử dụng ValidationError từ rest_framework.exceptions
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            ticket = serializer.save(
+                user=request.user,
+                event=event,
+                expires_at=timezone.now() + timedelta(minutes=30)
+            )
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except Exception as e:
+            return Response({"detail": f"Lỗi khi tạo vé: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(methods=['post'], url_path='validate', detail=True, permission_classes=[perms.IsVerifiedOrganizer])
+    def validate_ticket(self, request, pk=None):
+        """
+        API Xác nhận mã QR: /tickets/{ticket_id}/validate/
+        """
+        try:
+            ticket = self.get_object()
+        except Ticket.DoesNotExist:
+            return Response({"detail": "Vé không tồn tại."}, status=status.HTTP_404_NOT_FOUND)
+
+        qr_code = request.data.get('qr_code')
+        if not qr_code:
+            return Response({"detail": "Mã QR không được cung cấp."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if ticket.qr_code != qr_code:
+            return Response({"status": "invalid", "detail": "Mã QR không hợp lệ."}, status=status.HTTP_400_BAD_REQUEST)
+        if ticket.status != 'booked':
+            return Response({"status": "invalid", "detail": "Vé không ở trạng thái hợp lệ."}, status=status.HTTP_400_BAD_REQUEST)
+        if ticket.expires_at < timezone.now():
+            return Response({"status": "invalid", "detail": "Vé đã hết hạn."}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "ticket_id": ticket.id,
+            "event_id": ticket.event.id,
+            "participant_id": ticket.user.id,
+            "status": "valid"
+        }, status=status.HTTP_200_OK)
+
+
+class PaymentViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    queryset = Payment.objects.all()
+    serializer_class = serializers.PaymentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        ticket_id = request.data.get('ticket_id')
+        if not ticket_id:
+            return Response({"detail": "Thiếu ticket_id"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            ticket = Ticket.objects.get(id=ticket_id, user=request.user, status='pending')
+        except Ticket.DoesNotExist:
+            return Response({"detail": "Vé không tồn tại hoặc không ở trạng thái chờ."},
+                            status=status.HTTP_404_NOT_FOUND)
+        if Payment.objects.filter(ticket_id=ticket_id, status='pending').exists():
+            return Response({"detail": "Đã tồn tại thanh toán đang chờ cho vé này."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        total_price = ticket.quantity * (
+            ticket.event.ticket_price_regular if ticket.ticket_type == 'regular' else ticket.event.ticket_price_vip)
+        payment = serializer.save(
+            ticket=ticket,
+            amount=total_price,
+            status='pending'
+        )
+        if payment.method == 'vnpay':
+            payment_url = self.create_vnpay_payment_url(payment, request)
+            payment.payment_url = payment_url
+            payment.save()
+        return Response({
+            "payment_url": payment.payment_url,
+            "ticket_id": ticket.id,
+            "status": payment.status
+        }, status=status.HTTP_201_CREATED)
+
+    def create_vnpay_payment_url(self, payment, request):
+        vnp = vnpay()
+        vnp.requestData['vnp_Version'] = '2.1.0'
+        vnp.requestData['vnp_Command'] = 'pay'
+        vnp.requestData['vnp_TmnCode'] = settings.VNPAY_TMN_CODE
+        vnp.requestData['vnp_Amount'] = int(payment.amount * 100)  # VNPay requires amount in VND * 100
+        vnp.requestData['vnp_CurrCode'] = 'VND'
+        vnp.requestData['vnp_TxnRef'] = f"{payment.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        vnp.requestData['vnp_OrderInfo'] = f"Thanh toan ve {payment.ticket.event.name}"
+        vnp.requestData['vnp_OrderType'] = 'billpayment'
+        vnp.requestData['vnp_Locale'] = 'vn'
+        vnp.requestData['vnp_CreateDate'] = datetime.now().strftime('%Y%m%d%H%M%S')
+        vnp.requestData['vnp_IpAddr'] = get_client_ip(request)
+        vnp.requestData['vnp_ReturnUrl'] = settings.VNPAY_RETURN_URL
+        payment_url = vnp.get_payment_url(settings.VNPAY_PAYMENT_URL, settings.VNPAY_HASH_SECRET_KEY)
+        return payment_url
+
+    @action(methods=['get'], url_path='return', detail=False, permission_classes=[permissions.AllowAny])
+    def payment_return(self, request):
+        input_data = request.query_params
+        if not input_data:
+            return Response({"detail": "Không có dữ liệu trả về"}, status=status.HTTP_400_BAD_REQUEST)
+        vnp = vnpay()
+        vnp.responseData = input_data.dict()
+        payment_id = input_data.get('vnp_TxnRef', '').split('_')[0]
+        try:
+            payment = Payment.objects.get(id=payment_id)
+        except Payment.DoesNotExist:
+            return Response({"detail": "Thanh toán không tồn tại."}, status=status.HTTP_404_NOT_FOUND)
+        if vnp.validate_response(settings.VNPAY_HASH_SECRET_KEY):
+            response_code = input_data.get('vnp_ResponseCode')
+            if response_code == '00':
+                payment.status = 'completed'
+                payment.ticket.status = 'booked'
+                payment.ticket.save()
+                payment.save()
+                return Response({
+                    "detail": "Thanh toán thành công.",
+                    "payment_id": payment.id,
+                    "ticket_id": payment.ticket.id
+                }, status=status.HTTP_200_OK)
+            else:
+                payment.status = 'failed'
+                payment.save()
+                return Response({
+                    "detail": f"Thanh toán thất bại. Mã lỗi: {response_code}"
+                }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            payment.status = 'failed'
+            payment.save()
+            return Response({
+                "detail": "Sai chữ ký. Thanh toán không hợp lệ."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(methods=['get', 'post'], url_path='ipn', detail=False, permission_classes=[permissions.AllowAny])
+    def payment_ipn(self, request):
+        input_data = request.GET
+        if not input_data:
+            return JsonResponse({'RspCode': '99', 'Message': 'Invalid request'})
+        vnp = vnpay()
+        vnp.responseData = input_data.dict()
+        payment_id = input_data.get('vnp_TxnRef', '').split('_')[0]
+        try:
+            payment = Payment.objects.get(id=payment_id)
+        except Payment.DoesNotExist:
+            return JsonResponse({'RspCode': '01', 'Message': 'Order not found'})
+        if payment.status == 'completed':
+            return JsonResponse({'RspCode': '02', 'Message': 'Order Already Updated'})
+        if vnp.validate_response(settings.VNPAY_HASH_SECRET_KEY):
+            response_code = input_data.get('vnp_ResponseCode')
+            if response_code == '00':
+                payment.status = 'completed'
+                payment.ticket.status = 'booked'
+                payment.ticket.save()
+                payment.save()
+                return JsonResponse({'RspCode': '00', 'Message': 'Confirm Success'})
+            else:
+                payment.status = 'failed'
+                payment.save()
+                return JsonResponse({'RspCode': '00', 'Message': 'Confirm Success'})
+        else:
+            return JsonResponse({'RspCode': '97', 'Message': 'Invalid Signature'})
