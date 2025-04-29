@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from events.views import UserViewSet, CategoryViewSet, EventViewSet, OrganizerViewSet, PaymentViewSet, TicketViewSet
+from events.views import UserViewSet, CategoryViewSet, EventViewSet, OrganizerViewSet, PaymentViewSet, TicketViewSet, EventTicketViewSet
 from . import tests
 
 router = DefaultRouter()
@@ -9,8 +9,9 @@ router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'events', EventViewSet, basename='event')
 router.register(r'organizers', OrganizerViewSet, basename='organizer')
 router.register(r'payments', PaymentViewSet, basename='payment')
-router.register(r'events/(?P<event_id>\d+)/tickets', TicketViewSet, basename='event-ticket')
+router.register(r'events/(?P<event_id>\d+)/tickets', EventTicketViewSet, basename='event-ticket')
 router.register(r'tickets', TicketViewSet, basename='ticket')
+
 
 urlpatterns = [
     path('', include(router.urls)),

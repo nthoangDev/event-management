@@ -348,7 +348,10 @@ class EventViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet):
         serializer = self.serializer_class(events, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-class TicketViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+class EventTicketViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    """
+    ViewSet cho các API liên quan đến vé của một sự kiện cụ thể (cần event_id).
+    """
     queryset = Ticket.objects.all()
     serializer_class = serializers.TicketSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -369,7 +372,7 @@ class TicketViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
-        except ValidationError as e:  # Sử dụng ValidationError từ rest_framework.exceptions
+        except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
@@ -383,10 +386,19 @@ class TicketViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
         except Exception as e:
             return Response({"detail": f"Lỗi khi tạo vé: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class TicketViewSet(viewsets.GenericViewSet):
+    """
+    ViewSet cho các API liên quan đến vé nói chung
+    """
+    queryset = Ticket.objects.all()
+    serializer_class = serializers.TicketSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
     @action(methods=['post'], url_path='validate', detail=True, permission_classes=[perms.IsVerifiedOrganizer])
     def validate_ticket(self, request, pk=None):
         """
         API Xác nhận mã QR: /tickets/{ticket_id}/validate/
+        Cho phép nhà tổ chức quét mã QR để xác nhận người tham gia tại sự kiện.
         """
         try:
             ticket = self.get_object()
@@ -408,9 +420,54 @@ class TicketViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
             "ticket_id": ticket.id,
             "event_id": ticket.event.id,
             "participant_id": ticket.user.id,
-            "status": "valid"
+            "status": "valid",
+            "message": "Xác nhận vé thành công."
         }, status=status.HTTP_200_OK)
 
+    @action(methods=['get'], url_path='history', detail=False, permission_classes=[permissions.IsAuthenticated])
+    def ticket_history(self, request):
+        """
+        API Xem lịch sử đặt vé: /tickets/history/
+        Cho phép người tham gia xem danh sách các vé đã đặt.
+        """
+        tickets = Ticket.objects.filter(user=request.user).order_by('-created_date')
+        serializer = self.get_serializer(tickets, many=True)
+        return Response({
+            "message": "Lịch sử đặt vé được trả về thành công.",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    @action(methods=['post'], url_path='cancel', detail=True, permission_classes=[permissions.IsAuthenticated])
+    def cancel_ticket(self, request, pk=None):
+        """
+        API Hủy vé: /tickets/{ticket_id}/cancel/
+        Cho phép người tham gia hủy vé nếu vé ở trạng thái chờ.
+        """
+        try:
+            ticket = self.get_object()
+        except Ticket.DoesNotExist:
+            return Response({"detail": "Vé không tồn tại."}, status=status.HTTP_404_NOT_FOUND)
+
+        if ticket.user != request.user:
+            return Response({"detail": "Bạn không có quyền hủy vé này."}, status=status.HTTP_403_FORBIDDEN)
+
+        if ticket.status == 'cancelled':
+            return Response({"detail": "Vé đã bị hủy trước đó."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if ticket.status != 'pending':
+            return Response({"detail": "Chỉ có thể hủy vé ở trạng thái chờ."}, status=status.HTTP_400_BAD_REQUEST)
+
+        ticket.status = 'cancelled'
+        ticket.save()
+
+        try:
+            payment = Payment.objects.get(ticket=ticket)
+            payment.status = 'failed'
+            payment.save()
+        except Payment.DoesNotExist:
+            pass
+
+        return Response({"detail": "Vé đã được hủy thành công."}, status=status.HTTP_200_OK)
 
 class PaymentViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
     queryset = Payment.objects.all()
