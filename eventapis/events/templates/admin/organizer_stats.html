@@ -1,0 +1,202 @@
+{% extends 'admin/base_site.html' %}
+{% block content %}
+<style>
+    .organizer-stats-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .organizer-stats-title {
+        text-align: center;
+        font-size: 40px;
+        font-weight: bold;
+        color: #328E6E;
+        margin-bottom: 30px;
+    }
+    .stats-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+    }
+    .stats-item {
+        flex: 1;
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .stats-item h2 {
+        font-size: 24px;
+        color: #34495e;
+        margin-bottom: 15px;
+    }
+    .stats-list {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 15px 0;
+    }
+    .stats-list li {
+        list-style: none;
+        padding: 10px;
+        background-color: #f1f3f5;
+        margin-bottom: 5px;
+        border-radius: 4px;
+        transition: background-color 0.3s;
+    }
+    .stats-list li:hover {
+        background-color: #e9ecef;
+    }
+    .chart-container {
+        width: 100%;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+    @media (max-width: 768px) {
+        .stats-row {
+            flex-direction: column;
+        }
+        .stats-item {
+            width: 100%;
+        }
+        .chart-container {
+            max-width: 100%;
+        }
+    }
+</style>
+
+<div class="organizer-stats-container">
+    <h1 class="organizer-stats-title">THỐNG KÊ NHÀ TỔ CHỨC</h1>
+    <div class="stats-row">
+        <div class="stats-item">
+            <h2>Ticket Sales and Revenue</h2>
+            <ul class="stats-list">
+                {% for stat in ticket_stats %}
+                <li>{{ stat.id }} - {{ stat.name }} - {{ stat.total_tickets }} vé - {{ stat.total_revenue|floatformat:2 }} VND</li>
+                {% empty %}
+                <li>Không có dữ liệu</li>
+                {% endfor %}
+            </ul>
+            <div class="chart-container">
+                <canvas id="ticketChart"></canvas>
+            </div>
+        </div>
+
+        <div class="stats-item">
+            <h2>Event Feedback</h2>
+            <ul class="stats-list">
+                {% for review in review_stats %}
+                <li>{{ review.event__name }} - Đánh giá trung bình: {{ review.avg_rating|floatformat:1 }} - {{ review.comment|default:"No comment" }}</li>
+                {% empty %}
+                <li>Không có phản hồi</li>
+                {% endfor %}
+            </ul>
+            <div class="chart-container">
+                <canvas id="reviewChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    // Hàm tạo màu ngẫu nhiên
+    function generateRandomColors(count, opacity = 0.2) {
+        const backgroundColors = [];
+        const borderColors = [];
+        for (let i = 0; i < count; i++) {
+            const r = Math.floor(Math.random() * 256);
+            const g = Math.floor(Math.random() * 256);
+            const b = Math.floor(Math.random() * 256);
+            backgroundColors.push(`rgba(${r}, ${g}, ${b}, ${opacity})`);
+            borderColors.push(`rgba(${r}, ${g}, ${b}, 1)`);
+        }
+        return { backgroundColors, borderColors };
+    }
+
+    // 1. Ticket Sales and Revenue Chart
+    let ticketData = [];
+    let revenueData = [];
+    let ticketLabels = [];
+
+    {% for stat in ticket_stats %}
+        ticketData.push({{ stat.total_tickets }});
+        revenueData.push({{ stat.total_revenue|default:0 }});
+        ticketLabels.push('{{ stat.name|truncatechars:30 }}');
+    {% empty %}
+        ticketData.push(0);
+        revenueData.push(0);
+        ticketLabels.push('No data');
+    {% endfor %}
+
+    const ticketColors = generateRandomColors(ticketData.length);
+    const revenueColors = generateRandomColors(ticketData.length);
+    const ticketCtx = document.getElementById('ticketChart');
+    new Chart(ticketCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ticketLabels,
+            datasets: [
+                {
+                    label: 'Số lượng vé',
+                    data: ticketData,
+                    backgroundColor: ticketColors.backgroundColors,
+                    borderColor: ticketColors.borderColors,
+                    borderWidth: 1
+                },
+                {
+                    label: 'Doanh thu (VND)',
+                    data: revenueData,
+                    backgroundColor: revenueColors.backgroundColors,
+                    borderColor: revenueColors.borderColors,
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            }
+        }
+    });
+
+    // 2. Event Feedback Chart
+    let reviewData = [];
+    let reviewLabels = [];
+
+    {% for review in review_stats %}
+        reviewData.push({{ review.avg_rating|default:0 }});
+        reviewLabels.push('{{ review.event__name|truncatechars:30 }}');
+    {% empty %}
+        reviewData.push(0);
+        reviewLabels.push('No data');
+    {% endfor %}
+
+    const reviewColors = generateRandomColors(reviewData.length);
+    const reviewCtx = document.getElementById('reviewChart');
+    new Chart(reviewCtx, {
+        type: 'doughnut',
+        data: {
+            labels: reviewLabels,
+            datasets: [{
+                label: 'Đánh giá trung bình',
+                data: reviewData,
+                backgroundColor: reviewColors.backgroundColors,
+                borderColor: reviewColors.borderColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

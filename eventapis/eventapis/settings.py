@@ -29,7 +29,6 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -39,11 +38,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'events.apps.EventsConfig', # Ta cần cho django biết về sự tồn tại của module event thông qua biến INSTALLED_APPS
+    'events.apps.EventsConfig',  # Ta cần cho django biết về sự tồn tại của module event thông qua biến INSTALLED_APPS
     'ckeditor',
     'ckeditor_uploader',
     'rest_framework',
     'drf_yasg',
+    'rest_framework.authtoken',
     'oauth2_provider',
 
 ]
@@ -79,7 +79,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'eventapis.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
@@ -90,10 +89,11 @@ DATABASES = {
         'NAME': 'eventdb',
         'USER': 'root',
         'PASSWORD': 'admin123',
-        'HOST': '' # mặc định localhost
+        'HOST': ''  # mặc định localhost
     }
 }
 import pymysql
+
 pymysql.install_as_MySQLdb()
 
 # Chỉ định lớp model đại diện cho một User, mặc định là “auth.User”.
@@ -117,7 +117,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
@@ -128,7 +127,6 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -146,15 +144,20 @@ from cloudinary.utils import cloudinary_url
 
 # Configuration
 cloudinary.config(
-    cloud_name = "doi6ayqri",
-    api_key = "658164331927654",
-    api_secret = "506_HMPvosnq-znGAu0Q-t12EVo", # Click 'View API Keys' above to copy your API secret
+    cloud_name="doi6ayqri",
+    api_key="658164331927654",
+    api_secret="506_HMPvosnq-znGAu0Q-t12EVo",  # Click 'View API Keys' above to copy your API secret
     secure=True
 )
 
 # Cấu hình cho REST framework để sử dụng OAuth2 cho xác thực
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': ('oauth2_provider.contrib.rest_framework.OAuth2Authentication',)  # Sử dụng OAuth2 cho xác thực
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'oauth2_provider.contrib.rest_framework.OAuth2Authentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
 }
 
 # Cấu hình cho OAuth2 provider, sử dụng JSONAuthLibCore để xử lý xác thực

@@ -1,0 +1,144 @@
+{% extends 'admin/base_site.html' %}
+{% block content %}
+
+<style>
+    .event-stats-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .event-stats-title {
+        text-align: center;
+        font-size: 40px;
+        font-weight: bold;
+        color: #FF9B17;
+        margin-bottom: 20px;
+    }
+    .event-stats-subtitle {
+        font-size: 20px;
+        color: #34495e;
+        margin: 10px 0;
+        text-align: center;
+    }
+    .event-stats-list {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 20px 0;
+    }
+    .event-stats-list li {
+        list-style: none;
+        font-size: 16px;
+        padding: 12px;
+        background-color: #ffffff;
+        margin-bottom: 8px;
+        border-radius: 4px;
+        transition: background-color 0.3s;
+    }
+    .event-stats-list li:hover {
+        background-color: #e9ecef;
+    }
+    .chart-container {
+        width: 100%;
+        max-width: 700px;
+        margin: 0 auto;
+    }
+    @media (max-width: 768px) {
+        .event-stats-container {
+            padding: 15px;
+        }
+        .chart-container {
+            max-width: 100%;
+        }
+        .event-stats-title {
+            font-size: 32px;
+        }
+        .event-stats-subtitle {
+            font-size: 18px;
+        }
+        .event-stats-list li {
+            font-size: 14px;
+            padding: 10px;
+        }
+    }
+</style>
+
+<div class="event-stats-container">
+    <h1 class="event-stats-title">THỐNG KÊ SỐ LƯỢNG VÉ THEO SỰ KIỆN</h1>
+    <h2 class="event-stats-subtitle">Tổng số sự kiện: {{ stats|length }}</h2>
+    <ul class="event-stats-list">
+        {% for s in stats %}
+        <li>{{ s.id }} - {{ s.name }} - {{ s.ticket_count }} vé</li>
+        {% empty %}
+        <li>Không có dữ liệu</li>
+        {% endfor %}
+    </ul>
+
+    <div class="chart-container">
+        <canvas id="myChart"></canvas>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    // Hàm tạo màu ngẫu nhiên
+    function generateRandomColors(count, opacity = 0.2) {
+        const backgroundColors = [];
+        const borderColors = [];
+        for (let i = 0; i < count; i++) {
+            const r = Math.floor(Math.random() * 256);
+            const g = Math.floor(Math.random() * 256);
+            const b = Math.floor(Math.random() * 256);
+            backgroundColors.push(`rgba(${r}, ${g}, ${b}, ${opacity})`);
+            borderColors.push(`rgba(${r}, ${g}, ${b}, 1)`);
+        }
+        return { backgroundColors, borderColors };
+    }
+
+    // Dữ liệu cho biểu đồ
+    let data = [];
+    let labels = [];
+
+    {% for s in stats %}
+        data.push({{ s.ticket_count }});
+        labels.push('{{ s.name|truncatechars:30 }}');
+    {% empty %}
+        data.push(0);
+        labels.push('No data');
+    {% endfor %}
+
+    // Tạo màu ngẫu nhiên
+    const chartColors = generateRandomColors(data.length);
+
+    // Khởi tạo biểu đồ
+    const ctx = document.getElementById('myChart');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Số lượng vé',
+                data: data,
+                backgroundColor: chartColors.backgroundColors,
+                borderColor: chartColors.borderColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

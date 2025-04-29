@@ -1,0 +1,265 @@
+{% extends 'admin/base_site.html' %}
+{% block content %}
+<style>
+    .admin-stats-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .admin-stats-title {
+        text-align: center;
+        font-size: 32px;
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 30px;
+    }
+    .stats-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 30px;
+        gap: 20px;
+    }
+    .stats-item {
+        flex: 1;
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .stats-item h2 {
+        font-size: 24px;
+        color: #34495e;
+        margin-bottom: 15px;
+    }
+    .stats-list {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 15px 0;
+    }
+    .stats-list li {
+        list-style: none;
+        padding: 10px;
+        background-color: #f1f3f5;
+        margin-bottom: 5px;
+        border-radius: 4px;
+        transition: background-color 0.3s;
+    }
+    .stats-list li:hover {
+        background-color: #e9ecef;
+    }
+    .chart-container {
+        width: 100%;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+    @media (max-width: 768px) {
+        .stats-row {
+            flex-direction: column;
+        }
+        .stats-item {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="admin-stats-container">
+    <h1 class="admin-stats-title">THỐNG KÊ QUẢN TRỊ VIÊN</h1>
+
+    <div class="stats-row">
+        <div class="stats-item">
+            <h2>Events by Month</h2>
+            <ul class="stats-list">
+                {% for stat in monthly_events %}
+                <li>{{ stat.month|date:"Y-m" }} - {{ stat.event_count }} sự kiện</li>
+                {% empty %}
+                <li>Không có dữ liệu</li>
+                {% endfor %}
+            </ul>
+            <div class="chart-container">
+                <canvas id="monthlyEventsChart"></canvas>
+            </div>
+        </div>
+
+        <div class="stats-item">
+            <h2>Events by Quarter</h2>
+            <ul class="stats-list">
+                {% for stat in quarterly_events %}
+                <li>{{ stat.quarter|date:"Y" }} - Q{{ stat.quarter_number }} - {{ stat.event_count }} sự kiện</li>
+                {% empty %}
+                <li>Không có dữ liệu</li>
+                {% endfor %}
+            </ul>
+            <div class="chart-container">
+                <canvas id="quarterlyEventsChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-row">
+        <div class="stats-item">
+            <h2>Attendees by Month</h2>
+            <ul class="stats-list">
+                {% for stat in monthly_attendees %}
+                <li>{{ stat.month|date:"Y-m" }} - {{ stat.attendee_count }} người tham gia</li>
+                {% empty %}
+                <li>Không có dữ liệu</li>
+                {% endfor %}
+            </ul>
+            <div class="chart-container">
+                <canvas id="monthlyAttendeesChart"></canvas>
+            </div>
+        </div>
+
+        <div class="stats-item">
+            <h2>Attendees by Quarter</h2>
+            <ul class="stats-list">
+                {% for stat in quarterly_attendees %}
+                <li>{{ stat.quarter|date:"Y" }} - Q{{ stat.quarter_number }} - {{ stat.attendee_count }} người tham gia</li>
+                {% empty %}
+                <li>Không có dữ liệu</li>
+                {% endfor %}
+            </ul>
+            <div class="chart-container">
+                <canvas id="quarterlyAttendeesChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    // Hàm tạo màu ngẫu nhiên
+    function generateRandomColors(count, opacity = 0.2) {
+        const backgroundColors = [];
+        const borderColors = [];
+        for (let i = 0; i < count; i++) {
+            const r = Math.floor(Math.random() * 256);
+            const g = Math.floor(Math.random() * 256);
+            const b = Math.floor(Math.random() * 256);
+            backgroundColors.push(`rgba(${r}, ${g}, ${b}, ${opacity})`);
+            borderColors.push(`rgba(${r}, ${g}, ${b}, 1)`);
+        }
+        return { backgroundColors, borderColors };
+    }
+
+    // 1. Events by Month
+    let monthlyEventData = [];
+    let monthlyEventLabels = [];
+    {% for stat in monthly_events %}
+        monthlyEventData.push({{ stat.event_count }});
+        monthlyEventLabels.push('{{ stat.month|date:"Y-m" }}');
+    {% empty %}
+        monthlyEventData.push(0);
+        monthlyEventLabels.push('No data');
+    {% endfor %}
+    const monthlyEventColors = generateRandomColors(monthlyEventData.length);
+    new Chart(document.getElementById('monthlyEventsChart'), {
+        type: 'bar',
+        data: {
+            labels: monthlyEventLabels,
+            datasets: [{
+                label: 'Số lượng sự kiện',
+                data: monthlyEventData,
+                backgroundColor: monthlyEventColors.backgroundColors,
+                borderColor: monthlyEventColors.borderColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: { y: { beginAtZero: true } },
+            plugins: { legend: { position: 'top' } }
+        }
+    });
+
+    // 2. Events by Quarter
+    let quarterlyEventData = [];
+    let quarterlyEventLabels = [];
+    {% for stat in quarterly_events %}
+        quarterlyEventData.push({{ stat.event_count }});
+        quarterlyEventLabels.push('{{ stat.quarter|date:"Y-Q" }}');
+    {% empty %}
+        quarterlyEventData.push(0);
+        quarterlyEventLabels.push('No data');
+    {% endfor %}
+    const quarterlyEventColors = generateRandomColors(quarterlyEventData.length);
+    new Chart(document.getElementById('quarterlyEventsChart'), {
+        type: 'bar',
+        data: {
+            labels: quarterlyEventLabels,
+            datasets: [{
+                label: 'Số lượng sự kiện',
+                data: quarterlyEventData,
+                backgroundColor: quarterlyEventColors.backgroundColors,
+                borderColor: quarterlyEventColors.borderColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: { y: { beginAtZero: true } },
+            plugins: { legend: { position: 'top' } }
+        }
+    });
+
+    // 3. Attendees by Month
+    let monthlyAttendeeData = [];
+    let monthlyAttendeeLabels = [];
+    {% for stat in monthly_attendees %}
+        monthlyAttendeeData.push({{ stat.attendee_count }});
+        monthlyAttendeeLabels.push('{{ stat.month|date:"Y-m" }}');
+    {% empty %}
+        monthlyAttendeeData.push(0);
+        monthlyAttendeeLabels.push('No data');
+    {% endfor %}
+    const monthlyAttendeeColors = generateRandomColors(monthlyAttendeeData.length);
+    new Chart(document.getElementById('monthlyAttendeesChart'), {
+        type: 'bar',
+        data: {
+            labels: monthlyAttendeeLabels,
+            datasets: [{
+                label: 'Số người tham gia',
+                data: monthlyAttendeeData,
+                backgroundColor: monthlyAttendeeColors.backgroundColors,
+                borderColor: monthlyAttendeeColors.borderColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: { y: { beginAtZero: true } },
+            plugins: { legend: { position: 'top' } }
+        }
+    });
+
+    // 4. Attendees by Quarter
+    let quarterlyAttendeeData = [];
+    let quarterlyAttendeeLabels = [];
+    {% for stat in quarterly_attendees %}
+        quarterlyAttendeeData.push({{ stat.attendee_count }});
+        quarterlyAttendeeLabels.push('{{ stat.quarter|date:"Y-Q" }}');
+    {% empty %}
+        quarterlyAttendeeData.push(0);
+        quarterlyAttendeeLabels.push('No data');
+    {% endfor %}
+    const quarterlyAttendeeColors = generateRandomColors(quarterlyAttendeeData.length);
+    new Chart(document.getElementById('quarterlyAttendeesChart'), {
+        type: 'bar',
+        data: {
+            labels: quarterlyAttendeeLabels,
+            datasets: [{
+                label: 'Số người tham gia',
+                data: quarterlyAttendeeData,
+                backgroundColor: quarterlyAttendeeColors.backgroundColors,
+                borderColor: quarterlyAttendeeColors.borderColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: { y: { beginAtZero: true } },
+            plugins: { legend: { position: 'top' } }
+        }
+    });
+</script>
+{% endblock %}
