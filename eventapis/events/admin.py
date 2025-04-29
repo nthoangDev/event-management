@@ -1,12 +1,13 @@
 from django.contrib import admin
 from django.db.models import Count, Sum, Avg
-from django.db.models.functions import TruncMonth, TruncQuarter,ExtractQuarter
+from django.db.models.functions import TruncMonth, TruncQuarter, ExtractQuarter
 from django.template.response import TemplateResponse
 from django import forms
 from django.urls import path
 from django.utils.html import mark_safe
 from ckeditor_uploader.widgets import CKEditorUploadingWidget
-from .models import User, OrganizerRequest, Category, Event, EventTag, Ticket, Payment, Like, Interest, Review, Notification
+from .models import User, OrganizerRequest, Category, Event, EventTag, Ticket, Payment, Like, Interest, Review, \
+    Notification
 from django.db.models import Q
 from datetime import datetime
 from django.utils import timezone
@@ -50,7 +51,8 @@ class MyAdminSite(admin.AdminSite):
 
         # Tính total_revenue trong Python
         for stat in ticket_stats:
-            stat['total_revenue'] = stat['total_tickets'] * stat['ticket_price'] if stat['total_tickets'] and stat['ticket_price'] else 0
+            stat['total_revenue'] = stat['total_tickets'] * stat['ticket_price'] if stat['total_tickets'] and stat[
+                'ticket_price'] else 0
 
         # Thống kê phản hồi
         review_stats = Review.objects.filter(event__organizer=request.user).values(
@@ -101,6 +103,7 @@ class MyAdminSite(admin.AdminSite):
             'quarterly_attendees': quarterly_attendees,
         })
 
+
 admin_site = MyAdminSite(name='admin')
 
 
@@ -145,17 +148,17 @@ class CategoryAdmin(admin.ModelAdmin):
 # Custom Admin for Event
 class EventAdmin(admin.ModelAdmin):
     form = EventForm
-    list_display = ['id', 'name', 'organizer', 'event_time', 'status', 'category', 'active']
+    list_display = ['id', 'name', 'organizer', 'start_time', 'status', 'category', 'active']
     search_fields = ['name', 'description', 'location']
-    list_filter = ['status', 'category', 'event_time', 'active']
+    list_filter = ['status', 'category', 'start_time', 'active']
     readonly_fields = ['image_view']
 
     def image_view(self, obj):
         if obj.image:
             return mark_safe(f'<img src="{obj.image.url}" width="120" />')
-        return "No image"
+        return "Không có hình ảnh"
 
-    image_view.short_description = 'Image'
+    image_view.short_description = 'Hình ảnh'
 
 
 # Custom Admin for EventTag

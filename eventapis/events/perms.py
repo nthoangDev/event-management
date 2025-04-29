@@ -31,3 +31,15 @@ class IsAdminOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         return request.user.is_authenticated and request.user.is_staff
+
+class IsVerifiedOrganizer(permissions.BasePermission):
+    """
+    Chỉ cho phép nhà tổ chức đã xác thực (is_organizer=True, is_verified=True) thực hiện hành động.
+    """
+    def has_permission(self, request, view):
+        return (
+            request.user
+            and request.user.is_authenticated
+            and request.user.is_organizer
+            and request.user.is_verified
+        )

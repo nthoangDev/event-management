@@ -29,8 +29,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
-# Application definition
+SITE_ID = 3
 
+# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -38,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
     'events.apps.EventsConfig',  # Ta cần cho django biết về sự tồn tại của module event thông qua biến INSTALLED_APPS
     'ckeditor',
     'ckeditor_uploader',
@@ -46,6 +48,12 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'oauth2_provider',
 
+    # Google
+    "django.contrib.sites",
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
 ]
 
 MIDDLEWARE = [
@@ -54,9 +62,22 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+
+    'allauth.account.middleware.AccountMiddleware',
+
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "SCOPE": [
+            "profile",
+            "email",
+        ],
+        "AUTH_PARAMS": {"access_type": "online"}
+    }
+}
 
 ROOT_URLCONF = 'eventapis.urls'
 
@@ -152,14 +173,58 @@ cloudinary.config(
 
 # Cấu hình cho REST framework để sử dụng OAuth2 cho xác thực
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': ('oauth2_provider.contrib.rest_framework.OAuth2Authentication',)  # Sử dụng OAuth2 cho xác thực
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'oauth2_provider.contrib.rest_framework.OAuth2Authentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
 }
-
 
 # Cấu hình cho OAuth2 provider, sử dụng JSONAuthLibCore để xử lý xác thực
 OAUTH2_PROVIDER = {
     # parses OAuth2 data from application/json requests
     'OAUTH2_BACKEND_CLASS': 'oauth2_provider.oauth2_backends.JSONOAuthLibCore',
+
+    'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,  # 1 hour
+    'REFRESH_TOKEN_EXPIRE_SECONDS': 2592000,  # 30 days
+    'SCOPES': {'read': 'Read scope', 'write': 'Write scope'},
 }
 
+AUTHENTICATION_BACKENDS = (
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend"
+)
+
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/"
+
 AUTH_USER_MODEL = 'events.User'
+
+# Cấu hình VNPay
+VNPAY_TMN_CODE = 'YOUR_VNPAY_TMN_CODE'
+VNPAY_HASH_SECRET_KEY = 'YOUR_VNPAY_HASH_SECRET_KEY'
+VNPAY_URL = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
+VNPAY_RETURN_URL = 'http://localhost:8000/tickets/payment/return/'
+
+# Cấu hình gửi email
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'your-email@gmail.com'
+EMAIL_HOST_PASSWORD = 'your-app-password'
+DEFAULT_FROM_EMAIL = 'your-email@gmail.com'
+
+# Hoàng
+# Client_id : Ru0W0uxtzxQLmvscRcHhsWIEDhH86VpMHLphGCPj
+# Client_secret: BEqiUSiNIGpxOE7e5Fmr3w9ZzAoFDkHrOzL2wkBRkUH95PgyaNDzPOUdMj8jAV76D2RMopthVUapKuSDvS6Z6qPEPI7AixKeWEGTuM8k60rq5jJxHqWQg83i3djUlhs9
+
+# Quân
+# DEFAULT_OAUTH2_CLIENT_ID = 'LUQb13fIsa3mF5nnBakoDDTorY4Hhm88LUw429uz'
+# Client_secret = 'SzdKbmdauALjzHrr6GYZcJ5II4PGc6QcVxyM0Z7NxyelDZp3ZSnORXgNemSekVY2yABSAlrPlsQBlcEqbSOFIxaDsHk1kqPVdJgANvjD8RbvyCRf0OTP42bYdIVD47We'
+
+# GOOGLE_CLIENT_ID = '803363646882-969u7bsui6ujmr0g9tumrenlqsgjb2o9.apps.googleusercontent.com'
+# GOOGLE_OAUTH2_SECRET = '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'
+
