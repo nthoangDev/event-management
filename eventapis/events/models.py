@@ -7,8 +7,9 @@ from cloudinary.models import CloudinaryField
 # ------------------ USERS & ROLES ------------------
 class User(AbstractUser):
     avatar = CloudinaryField(null=True)
-    is_organizer = models.BooleanField(default=False)  # Phân quyền
-    balance = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # Hỗ trợ VIP
+    is_organizer = models.BooleanField(default=False)
+    is_verified = models.BooleanField(default=False)
+    balance = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     def __str__(self):
         return f"{self.username} ({self.email})"
@@ -48,7 +49,6 @@ class Category(BaseModel):
 
 class Event(BaseModel):
     organizer = models.ForeignKey(User, on_delete=models.PROTECT)
-
     name = models.CharField(max_length=255)
     description = RichTextField(null=True)
     event_time = models.DateTimeField()
@@ -58,7 +58,9 @@ class Event(BaseModel):
     video_url = models.URLField(null=True, blank=True)
     status = models.CharField(max_length=15, choices=[('pending', 'Pending'), ('approved', 'Approved'), ('hot', 'Hot'),
                                                       ('blocked', 'Blocked')], default='pending')
-    category = models.ForeignKey(Category, on_delete=models.PROTECT)
+    category = models.ForeignKey(Category, on_delete=models.PROTECT, null=True, related_name='events')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"Event: {self.name} | Organizer: {self.organizer.username} | Date: {self.event_time.strftime('%Y-%m-%d %H:%M')}"
